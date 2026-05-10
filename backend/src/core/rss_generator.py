@@ -158,23 +158,22 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
             fg.lastBuildDate(last_build)
 
         for item in items_query:
-            fe = fg.add_entry()
+            fe = fg.add_entry(order="append")
             fe.id(item.guid or item.id)
             fe.title(item.title or "(No title)")
-            # description: 输出摘要（优先使用 description 字段）
-            # content:encoded: 输出完整正文（CDATA 包裹），feedgen 自动处理
             summary = item.description or ""
             full_body = item.content or ""
-            if full_body:
-                # 有完整正文时：description 放摘要，content:encoded 放全文
+            if summary and full_body:
+                # 最理想：description 放摘要（HTML 实体编码），content:encoded 放全文（CDATA）
                 fe.description(summary)
-                fe.content(full_body)
+                fe.content(full_body, type="CDATA")
+            elif full_body:
+                # 仅有全文：description 放全文（实体编码）以保证基础客户端，content:encoded 放全文（CDATA）
+                fe.description(full_body)
+                fe.content(full_body, type="CDATA")
             elif summary:
-                # 只有摘要：直接放在 description
+                # 仅有摘要：只放 description
                 fe.description(summary)
-            else:
-                # 都为空：fallback
-                fe.description("")
             fe.link(href=item.link or "")
 
             if item.author:
@@ -261,19 +260,19 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> tuple | Non
                 instance_names[item.instance_id] = item.instance.name
 
         for item in all_items:
-            fe = fg.add_entry()
+            fe = fg.add_entry(order="append")
             fe.id(item.guid or item.id)
             fe.title(item.title or "(No title)")
-            # 合并源同样区分 description 和 content:encoded
             summary = item.description or ""
             full_body = item.content or ""
-            if full_body:
+            if summary and full_body:
                 fe.description(summary)
-                fe.content(full_body)
+                fe.content(full_body, type="CDATA")
+            elif full_body:
+                fe.description(full_body)
+                fe.content(full_body, type="CDATA")
             elif summary:
                 fe.description(summary)
-            else:
-                fe.description("")
             fe.link(href=item.link or "")
 
             if item.author:

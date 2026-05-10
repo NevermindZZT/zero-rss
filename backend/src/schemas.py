@@ -65,6 +65,7 @@ class InstanceCreate(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict, description="参数配置")
     schedule_type: str = Field(default="interval", description="调度类型: interval, cron, on_refresh, manual")
     schedule_config: dict[str, Any] | None = Field(default=None, description="调度配置")
+    rss_slug: str | None = Field(default=None, description="自定义 RSS 路径别名, 如 my-feed")
     max_items: int = Field(default=100, description="RSS 最大条目数")
 
 
@@ -75,6 +76,7 @@ class InstanceUpdate(BaseModel):
     params: dict[str, Any] | None = None
     schedule_type: str | None = None
     schedule_config: dict[str, Any] | None = None
+    rss_slug: str | None = Field(default=None, description="自定义 RSS 路径别名, 如 my-feed")
     max_items: int | None = None
     enabled: bool | None = None
 
@@ -90,6 +92,7 @@ class InstanceResponse(BaseModel):
     schedule_type: str
     schedule_config: dict[str, Any] | None = None
     rss_token: str
+    rss_slug: str | None = None
     rss_url: str = ""
     enabled: bool
     max_items: int
@@ -185,6 +188,7 @@ class MergeGroupCreate(BaseModel):
     name: str = Field(..., description="合并源名称")
     description: str = Field(default="", description="描述")
     instance_ids: list[str] = Field(default_factory=list, description="包含的实例 ID 列表")
+    rss_slug: str | None = Field(default=None, description="自定义 RSS 路径别名, 如 my-merged")
     max_items: int = Field(default=100, description="RSS 最大条目数")
 
 
@@ -193,6 +197,7 @@ class MergeGroupUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     instance_ids: list[str] | None = None
+    rss_slug: str | None = None
     max_items: int | None = None
 
 
@@ -202,6 +207,7 @@ class MergeGroupResponse(BaseModel):
     name: str
     description: str
     rss_token: str
+    rss_slug: str | None = None
     rss_url: str = ""
     max_items: int
     instance_ids: list[str] = []

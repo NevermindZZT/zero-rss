@@ -24,6 +24,34 @@ from ..config import settings
 logger = logging.getLogger("zero-rss.api.instances")
 router = APIRouter(prefix="/api/instances", tags=["instances"], dependencies=[Depends(verify_token)])
 
+import re
+_SLUG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$")
+
+
+async def _validate_slug(slug: str | None, db: AsyncSession, exclude_id: str | None = None) -> str | None:
+    """校验并查重 slug。"""
+    if slug is None:
+        return None
+    slug = slug.strip()
+    if not slug:
+        return None
+    if not _SLUG_RE.match(slug):
+        raise HTTPException(status_code=422, detail=f"slug 格式无效: 只能包含字母/数字/-/_, 且不能以 -/_ 开头结尾")
+    slug = slug.lower()
+    # 检查实例
+    stmt = select(Instance.id).where(Instance.rss_slug == slug)
+    if exclude_id:
+        stmt = stmt.where(Instance.id != exclude_id)
+    r = await db.execute(stmt)
+    if r.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail=f"slug '{slug}' 已被使用")
+    # 检查合并源
+    from ..models import MergeGroup
+    r2 = await db.execute(select(MergeGroup.id).where(MergeGroup.rss_slug == slug))
+    if r2.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail=f"slug '{slug}' 已被其他合并源使用")
+    return slug
+
 
 @router.get("", response_model=list[InstanceResponse])
 async def list_instances(
@@ -79,6 +107,7 @@ async def create_instance(
         schedule_type=data.schedule_type,
         schedule_config=json.dumps(data.schedule_config) if data.schedule_config else None,
         rss_token=rss_token,
+        rss_slug=await _validate_slug(data.rss_slug, db),
         max_items=data.max_items,
     )
     db.add(instance)
@@ -133,6 +162,8 @@ async def update_instance(
         update_data["schedule_config"] = json.dumps(update_data["schedule_config"], ensure_ascii=False)
     if "enabled" in update_data:
         update_data["enabled"] = 1 if update_data["enabled"] else 0
+    if "rss_slug" in update_data:
+        update_data["rss_slug"] = await _validate_slug(update_data["rss_slug"], db, exclude_id=instance_id)
 
     for key, value in update_data.items():
         setattr(instance, key, value)
@@ -328,7 +359,8 @@ def _instance_to_response(instance: Instance) -> InstanceResponse:
 
     script_name = instance.script.name if instance.script else ""
 
-    rss_url = f"{settings.base_url}/rss/{instance.rss_token}.xml"
+    slug_part = instance.rss_slug if instance.rss_slug else instance.rss_token
+    rss_url = f"{settings.base_url}/rss/{slug_part}.xml"
 
     return InstanceResponse(
         id=instance.id,
@@ -340,6 +372,7 @@ def _instance_to_response(instance: Instance) -> InstanceResponse:
         schedule_type=instance.schedule_type or "interval",
         schedule_config=schedule_config,
         rss_token=instance.rss_token,
+        rss_slug=instance.rss_slug,
         rss_url=rss_url,
         enabled=bool(instance.enabled),
         max_items=instance.max_items or 100,

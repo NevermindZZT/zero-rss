@@ -44,10 +44,13 @@ async def create_merge_group(
     """创建合并源。"""
     rss_token = str(uuid.uuid4()).replace("-", "")
 
+    # 校验 slug（跨表查重由 _validate_slug 处理）
+    from .instances import _validate_slug
     group = MergeGroup(
         name=data.name,
         description=data.description,
         rss_token=rss_token,
+        rss_slug=await _validate_slug(data.rss_slug, db),
         max_items=data.max_items,
     )
     db.add(group)
@@ -113,6 +116,10 @@ async def update_merge_group(
         group.max_items = data.max_items
 
     # 更新实例成员
+    if data.rss_slug is not None:
+        from .instances import _validate_slug
+        group.rss_slug = await _validate_slug(data.rss_slug, db, exclude_id=group_id)
+
     if data.instance_ids is not None:
         await db.execute(
             sa_delete(MergeGroupItem.__table__).where(MergeGroupItem.group_id == group_id)
@@ -162,13 +169,15 @@ def _group_to_response(group: MergeGroup) -> MergeGroupResponse:
         if item.instance:
             instance_names.append(item.instance.name)
 
-    rss_url = f"{settings.base_url}/rss/merge/{group.rss_token}.xml"
+    slug_part = group.rss_slug if group.rss_slug else group.rss_token
+    rss_url = f"{settings.base_url}/rss/merge/{slug_part}.xml"
 
     return MergeGroupResponse(
         id=group.id,
         name=group.name,
         description=group.description or "",
         rss_token=group.rss_token,
+        rss_slug=group.rss_slug,
         rss_url=rss_url,
         max_items=group.max_items or 100,
         instance_ids=instance_ids,

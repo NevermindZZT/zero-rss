@@ -53,6 +53,7 @@ class Instance(Base):
     schedule_type = Column(String(20), default="interval")  # interval, cron, on_refresh, manual
     schedule_config = Column(Text, nullable=True)  # JSON
     rss_token = Column(String(64), nullable=False, unique=True, default=_uuid)
+    rss_slug = Column(String(128), nullable=True, unique=True)
     enabled = Column(Integer, default=1)
     max_items = Column(Integer, default=100)
     created_at = Column(DateTime, default=_now)
@@ -131,6 +132,7 @@ class MergeGroup(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, default="")
     rss_token = Column(String(64), nullable=False, unique=True, default=_uuid)
+    rss_slug = Column(String(128), nullable=True, unique=True)
     max_items = Column(Integer, default=100)
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)

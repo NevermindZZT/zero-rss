@@ -30,6 +30,12 @@
       <n-form-item label="选择实例" required>
         <n-select v-model:value="form.instance_ids" :options="instanceOptions" multiple filterable placeholder="选择要合并的实例" />
       </n-form-item>
+      <n-form-item label="RSS 路径别名">
+        <n-input v-model:value="form.rss_slug" placeholder="可选, 如 all-news (字母/数字/-/_组成)" />
+        <template #feedback>
+          <n-text depth="3" style="font-size: 12px">设置后 RSS 地址为 /rss/merge/<b>{{ form.rss_slug || '...' }}</b>.xml</n-text>
+        </template>
+      </n-form-item>
       <n-form-item label="最大条目数">
         <n-input-number v-model:value="form.max_items" :min="10" :max="500" style="width: 120px" />
       </n-form-item>
@@ -67,6 +73,7 @@ const form = reactive({
   name: '',
   description: '',
   instance_ids: [] as string[],
+  rss_slug: '',
   max_items: 100,
 })
 
@@ -84,6 +91,12 @@ onMounted(async () => {
 
 const columns: DataTableColumn[] = [
   { title: '名称', key: 'name', ellipsis: { tooltip: true } },
+  {
+    title: '别名',
+    key: 'rss_slug',
+    width: 100,
+    render: (row: any) => row.rss_slug || '-',
+  },
   {
     title: '实例数',
     key: 'instance_ids',

@@ -62,6 +62,12 @@ const columns: DataTableColumn[] = [
     width: 140,
   },
   {
+    title: '别名',
+    key: 'rss_slug',
+    width: 100,
+    render: (row: any) => row.rss_slug || '-',
+  },
+  {
     title: '调度方式',
     key: 'schedule_type',
     width: 100,

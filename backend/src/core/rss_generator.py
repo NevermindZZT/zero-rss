@@ -19,25 +19,32 @@ logger = logging.getLogger("zero-rss.rss_generator")
 
 
 async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
-    """根据 RSS Token 生成 RSS XML。
+    """根据 RSS Token 或 Slug 生成 RSS XML。
 
+    先按 slug 查找实例, 未命中再按 token 查找。
     如果实例配置了 on_refresh 调度类型, 且数据已过期,
     则会先同步执行脚本更新数据再生成 XML。
 
     Args:
-        token: RSS 订阅 token。
+        token: RSS 订阅 token 或自定义 slug。
         base_url: 基础 URL, 用于生成 RSS 中的链接。
 
     Returns:
-        RSS XML 字符串, 如果 token 无效则返回 None。
+        RSS XML 字符串, 如果未找到则返回 None。
     """
     from .runner import run_script
 
     async with async_session() as session:
+        # 先按 slug 查, 再按 token 查
         result = await session.execute(
-            select(Instance).where(Instance.rss_token == token).options(selectinload(Instance.script))
+            select(Instance).where(Instance.rss_slug == token).options(selectinload(Instance.script))
         )
         instance = result.scalar_one_or_none()
+        if instance is None:
+            result = await session.execute(
+                select(Instance).where(Instance.rss_token == token).options(selectinload(Instance.script))
+            )
+            instance = result.scalar_one_or_none()
         if not instance:
             return None
 
@@ -157,28 +164,33 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
 
 
 async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
-    """根据合并源 Token 生成合并 RSS XML。
+    """根据合并源 Token 或 Slug 生成合并 RSS XML。
 
     将多个实例的 RSS 条目合并到一个 Feed 中，
     按发布时间倒序排列。
 
     Args:
-        token: 合并源的 RSS token。
+        token: 合并源的 RSS token 或自定义 slug。
         base_url: 基础 URL。
 
     Returns:
-        RSS XML 字符串, 如果 token 无效则返回 None。
+        RSS XML 字符串, 如果未找到则返回 None。
     """
     from ..models import MergeGroup, MergeGroupItem
 
     async with async_session() as session:
+        # 先按 slug 查, 再按 token 查
         result = await session.execute(
-            select(MergeGroup).where(MergeGroup.rss_token == token)
-            .options(
-                selectinload(MergeGroup.items).selectinload(MergeGroupItem.instance)
-            )
+            select(MergeGroup).where(MergeGroup.rss_slug == token)
+            .options(selectinload(MergeGroup.items).selectinload(MergeGroupItem.instance))
         )
         group = result.scalar_one_or_none()
+        if group is None:
+            result = await session.execute(
+                select(MergeGroup).where(MergeGroup.rss_token == token)
+                .options(selectinload(MergeGroup.items).selectinload(MergeGroupItem.instance))
+            )
+            group = result.scalar_one_or_none()
         if not group:
             return None
 

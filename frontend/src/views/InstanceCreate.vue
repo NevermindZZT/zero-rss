@@ -46,6 +46,12 @@
       <n-form-item label="描述">
         <n-input v-model:value="form.description" placeholder="可选描述" />
       </n-form-item>
+      <n-form-item label="RSS 路径别名">
+        <n-input v-model:value="form.rss_slug" placeholder="可选, 如 vue-releases (字母/数字/-/_组成)" />
+        <template #feedback>
+          <n-text depth="3" style="font-size: 12px">设置后 RSS 地址为 /rss/<b>{{ form.rss_slug || '...' }}</b>.xml, 不设置则自动生成随机字符串</n-text>
+        </template>
+      </n-form-item>
       <n-form-item label="最大条目数">
         <n-input-number v-model:value="form.max_items" :min="10" :max="500" style="width: 120px" />
       </n-form-item>
@@ -103,6 +109,7 @@ const form = ref({
   params: {} as Record<string, any>,
   schedule_type: 'interval',
   schedule_config: { interval_minutes: 60 } as Record<string, any> | null,
+  rss_slug: '',
   max_items: 100,
 })
 
@@ -182,6 +189,7 @@ async function handleCreate() {
       params: form.value.params,
       schedule_type: form.value.schedule_type,
       schedule_config: form.value.schedule_config,
+      rss_slug: form.value.rss_slug || undefined,
       max_items: form.value.max_items,
     })
     message.success('实例创建成功')

@@ -7,6 +7,7 @@ export interface MergeGroup {
   name: string
   description: string
   rss_token: string
+  rss_slug: string | null
   rss_url: string
   max_items: number
   instance_ids: string[]

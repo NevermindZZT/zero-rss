@@ -12,6 +12,7 @@ export interface Instance {
   schedule_type: string
   schedule_config: Record<string, any> | null
   rss_token: string
+  rss_slug: string | null
   rss_url: string
   enabled: boolean
   max_items: number
@@ -29,6 +30,7 @@ export interface InstanceForm {
   params: Record<string, any>
   schedule_type: string
   schedule_config: Record<string, any> | null
+  rss_slug?: string
   max_items: number
 }
 

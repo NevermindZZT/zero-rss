@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select, func, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,6 +77,67 @@ def _parse_script_metadata(code: str) -> dict[str, Any]:
                                 pass
 
     return metadata
+
+
+def _build_script_response(script: Script) -> ScriptResponse:
+    """将 Script ORM 模型转换为响应模型。"""
+    params_schema = json.loads(script.params_schema) if script.params_schema else []
+    default_schedule = json.loads(script.default_schedule) if script.default_schedule else None
+    return ScriptResponse(
+        id=script.id,
+        name=script.name,
+        description=script.description,
+        version=script.version,
+        author=script.author,
+        filename=script.filename,
+        code=script.code,
+        params_schema=params_schema,
+        default_schedule=default_schedule,
+        created_at=script.created_at,
+        updated_at=script.updated_at,
+    )
+
+
+async def _apply_uploaded_script(
+    script: Script,
+    file: UploadFile,
+    db: AsyncSession,
+) -> Script:
+    """将上传文件内容应用到现有脚本记录。"""
+    if not file.filename or not file.filename.endswith(".py"):
+        raise HTTPException(status_code=400, detail="File must be a .py file")
+
+    raw = await file.read()
+    try:
+        code = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be utf-8 encoded")
+
+    metadata = _parse_script_metadata(code)
+    if "_error" in metadata:
+        raise HTTPException(status_code=400, detail=f"Invalid Python syntax: {metadata['_error']}")
+    if not metadata["name"]:
+        raise HTTPException(status_code=400, detail="Script must define NAME variable")
+
+    # 若上传文件名变更，校验唯一性
+    if file.filename != script.filename:
+        existing = await db.execute(
+            select(Script).where(Script.filename == file.filename, Script.id != script.id)
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"Script filename '{file.filename}' already exists")
+
+    script.filename = file.filename
+    script.code = code
+    script.name = metadata["name"]
+    script.description = metadata.get("description", "")
+    script.version = metadata.get("version", "1.0.0")
+    script.author = metadata.get("author", "")
+    script.params_schema = json.dumps(metadata.get("params", []), ensure_ascii=False)
+    script.default_schedule = json.dumps(metadata.get("schedule")) if metadata.get("schedule") else None
+    script.updated_at = datetime.now(timezone.utc)
+
+    return script
 
 
 @router.get("", response_model=list[ScriptListItem])
@@ -152,7 +213,11 @@ async def create_script(
     if not file.filename or not file.filename.endswith(".py"):
         raise HTTPException(status_code=400, detail="File must be a .py file")
 
-    code = (await file.read()).decode("utf-8")
+    raw = await file.read()
+    try:
+        code = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be utf-8 encoded")
     metadata = _parse_script_metadata(code)
 
     if "_error" in metadata:
@@ -181,22 +246,7 @@ async def create_script(
     await db.commit()
     await db.refresh(script)
 
-    params_schema = json.loads(script.params_schema) if script.params_schema else []
-    default_schedule = json.loads(script.default_schedule) if script.default_schedule else None
-
-    return ScriptResponse(
-        id=script.id,
-        name=script.name,
-        description=script.description,
-        version=script.version,
-        author=script.author,
-        filename=script.filename,
-        code=script.code,
-        params_schema=params_schema,
-        default_schedule=default_schedule,
-        created_at=script.created_at,
-        updated_at=script.updated_at,
-    )
+    return _build_script_response(script)
 
 
 @router.get("/{script_id}", response_model=ScriptResponse)
@@ -209,22 +259,7 @@ async def get_script(
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
 
-    params_schema = json.loads(script.params_schema) if script.params_schema else []
-    default_schedule = json.loads(script.default_schedule) if script.default_schedule else None
-
-    return ScriptResponse(
-        id=script.id,
-        name=script.name,
-        description=script.description,
-        version=script.version,
-        author=script.author,
-        filename=script.filename,
-        code=script.code,
-        params_schema=params_schema,
-        default_schedule=default_schedule,
-        created_at=script.created_at,
-        updated_at=script.updated_at,
-    )
+    return _build_script_response(script)
 
 
 @router.put("/{script_id}", response_model=ScriptResponse)
@@ -256,22 +291,25 @@ async def update_script(
     await db.commit()
     await db.refresh(script)
 
-    params_schema = json.loads(script.params_schema) if script.params_schema else []
-    default_schedule = json.loads(script.default_schedule) if script.default_schedule else None
+    return _build_script_response(script)
 
-    return ScriptResponse(
-        id=script.id,
-        name=script.name,
-        description=script.description,
-        version=script.version,
-        author=script.author,
-        filename=script.filename,
-        code=script.code,
-        params_schema=params_schema,
-        default_schedule=default_schedule,
-        created_at=script.created_at,
-        updated_at=script.updated_at,
-    )
+
+@router.put("/{script_id}/upload", response_model=ScriptResponse)
+async def update_script_by_upload(
+    script_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """通过重新上传 .py 文件更新脚本模板。"""
+    script = await db.get(Script, script_id)
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+
+    await _apply_uploaded_script(script, file, db)
+    await db.commit()
+    await db.refresh(script)
+
+    return _build_script_response(script)
 
 
 @router.delete("/{script_id}", status_code=204)

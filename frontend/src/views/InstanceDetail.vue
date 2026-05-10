@@ -10,6 +10,7 @@
             <n-tag v-else type="warning" size="small" :bordered="false">已禁用</n-tag>
           </n-space>
           <n-space>
+            <n-button @click="openEditModal">编辑配置</n-button>
             <n-button @click="handleToggleEnabled">
               {{ instance.enabled ? '禁用' : '启用' }}
             </n-button>
@@ -88,6 +89,45 @@
       </n-space>
     </template>
   </n-spin>
+
+  <n-modal v-model:show="showEditModal" preset="card" title="编辑实例" style="width: 760px">
+    <n-space vertical :size="12">
+      <n-form-item label="实例名称" required>
+        <n-input v-model:value="editForm.name" placeholder="实例名称" />
+      </n-form-item>
+      <n-form-item label="描述">
+        <n-input v-model:value="editForm.description" placeholder="可选描述" />
+      </n-form-item>
+      <n-form-item label="RSS 路径别名">
+        <n-input v-model:value="editForm.rss_slug" placeholder="可选, 如 vue-releases" />
+      </n-form-item>
+      <n-form-item label="最大条目数">
+        <n-input-number v-model:value="editForm.max_items" :min="10" :max="500" style="width: 140px" />
+      </n-form-item>
+
+      <n-card size="small" title="参数配置" :bordered="true">
+        <ParamForm
+          v-if="selectedScript && selectedScript.params_schema?.length > 0"
+          :params="selectedScript.params_schema"
+          v-model:model-value="editForm.params"
+        />
+        <n-empty v-else description="此脚本没有可配置参数" />
+      </n-card>
+
+      <n-card size="small" title="调度配置" :bordered="true">
+        <ScheduleConfig
+          :model-value="{ type: editForm.schedule_type, config: editForm.schedule_config }"
+          @update:model-value="onEditScheduleChange"
+        />
+      </n-card>
+    </n-space>
+    <template #footer>
+      <n-space justify="end">
+        <n-button @click="showEditModal = false">取消</n-button>
+        <n-button type="primary" :loading="savingEdit" @click="handleSaveEdit">保存</n-button>
+      </n-space>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
@@ -97,22 +137,39 @@ import { NIcon, useMessage, useDialog, NTag, NButton, NSpace } from 'naive-ui'
 import { PlayFilledAlt, TrashCan } from '@vicons/carbon'
 import type { DataTableColumn } from 'naive-ui'
 import { useInstanceStore } from '@/stores/instances'
+import { useScriptStore } from '@/stores/scripts'
 import type { Instance, RunHistory, RSSItem } from '@/stores/instances'
 import RSSLinkDisplay from '@/components/RSSLinkDisplay.vue'
+import ParamForm from '@/components/ParamForm.vue'
+import ScheduleConfig from '@/components/ScheduleConfig.vue'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const instanceStore = useInstanceStore()
+const scriptStore = useScriptStore()
 
 const loading = ref(true)
 const running = ref(false)
 const historyLoading = ref(false)
 const itemsLoading = ref(false)
+const showEditModal = ref(false)
+const savingEdit = ref(false)
 const instance = ref<Instance | null>(null)
 const history = ref<RunHistory[]>([])
 const items = ref<RSSItem[]>([])
+const selectedScript = computed(() => scriptStore.currentScript)
+
+const editForm = ref({
+  name: '',
+  description: '',
+  params: {} as Record<string, any>,
+  schedule_type: 'interval',
+  schedule_config: { interval_minutes: 60 } as Record<string, any> | null,
+  rss_slug: '',
+  max_items: 100,
+})
 
 const scheduleLabel = computed(() => {
   const labels: Record<string, string> = { interval: '间隔触发', cron: '定时触发', on_refresh: '刷新触发', manual: '手动触发' }
@@ -122,6 +179,9 @@ const scheduleLabel = computed(() => {
 onMounted(async () => {
   const id = route.params.id as string
   instance.value = await instanceStore.fetchOne(id)
+  if (instance.value?.script_id) {
+    await scriptStore.fetchOne(instance.value.script_id)
+  }
   loading.value = false
   await loadHistory()
   await loadItems()
@@ -177,6 +237,61 @@ async function handleToggleEnabled() {
   }
 }
 
+function openEditModal() {
+  if (!instance.value) return
+  editForm.value = {
+    name: instance.value.name,
+    description: instance.value.description || '',
+    params: { ...(instance.value.params || {}) },
+    schedule_type: instance.value.schedule_type || 'interval',
+    schedule_config: instance.value.schedule_config ? { ...instance.value.schedule_config } : { interval_minutes: 60 },
+    rss_slug: instance.value.rss_slug || '',
+    max_items: instance.value.max_items || 100,
+  }
+  showEditModal.value = true
+}
+
+function onEditScheduleChange(val: { type: string; config: Record<string, any> | null }) {
+  editForm.value.schedule_type = val.type
+  editForm.value.schedule_config = val.config
+}
+
+async function handleSaveEdit() {
+  if (!instance.value) return
+  if (!editForm.value.name.trim()) {
+    message.error('实例名称不能为空')
+    return
+  }
+
+  savingEdit.value = true
+  try {
+    const updated = await instanceStore.update(instance.value.id, {
+      name: editForm.value.name.trim(),
+      description: editForm.value.description,
+      params: editForm.value.params,
+      schedule_type: editForm.value.schedule_type,
+      schedule_config: editForm.value.schedule_config,
+      rss_slug: editForm.value.rss_slug,
+      max_items: editForm.value.max_items,
+    })
+    instance.value = updated
+    showEditModal.value = false
+    message.success('实例更新成功')
+    await loadItems()
+  } catch (e: any) {
+    const detail = e.response?.data?.detail
+    if (typeof detail === 'string') {
+      message.error(detail)
+    } else if (detail?.message) {
+      message.error(detail.message)
+    } else {
+      message.error('更新失败')
+    }
+  } finally {
+    savingEdit.value = false
+  }
+}
+
 function handleDelete() {
   dialog.warning({
     title: '确认删除',
@@ -189,7 +304,15 @@ function handleDelete() {
         message.success('删除成功')
         router.push('/instances')
       } catch (e: any) {
-        message.error(e.response?.data?.detail || '删除失败')
+        const detail = e.response?.data?.detail
+        if (typeof detail === 'string') {
+          message.error(detail)
+        } else if (detail?.message) {
+          const groups = Array.isArray(detail.merge_groups) ? detail.merge_groups.join('、') : ''
+          message.error(groups ? `${detail.message}: ${groups}` : detail.message)
+        } else {
+          message.error('删除失败')
+        }
       }
     },
   })

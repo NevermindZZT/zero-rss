@@ -74,6 +74,20 @@ export const useScriptStore = defineStore('scripts', () => {
     return res.data
   }
 
+  async function updateScriptByUpload(id: string, file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await apiClient.put(`/api/scripts/${id}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    const idx = scripts.value.findIndex((s) => s.id === id)
+    if (idx >= 0) {
+      scripts.value[idx] = { ...scripts.value[idx], ...res.data }
+    }
+    currentScript.value = res.data
+    return res.data
+  }
+
   async function deleteScript(id: string) {
     await apiClient.delete(`/api/scripts/${id}`)
     scripts.value = scripts.value.filter((s) => s.id !== id)
@@ -90,6 +104,7 @@ export const useScriptStore = defineStore('scripts', () => {
     fetchOne,
     uploadScript,
     updateScript,
+    updateScriptByUpload,
     deleteScript,
   }
 })

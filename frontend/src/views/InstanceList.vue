@@ -153,7 +153,15 @@ function handleDelete(id: string, name: string) {
         message.success('删除成功')
         instances.value = instanceStore.instances
       } catch (e: any) {
-        message.error(e.response?.data?.detail || '删除失败')
+        const detail = e.response?.data?.detail
+        if (typeof detail === 'string') {
+          message.error(detail)
+        } else if (detail?.message) {
+          const groups = Array.isArray(detail.merge_groups) ? detail.merge_groups.join('、') : ''
+          message.error(groups ? `${detail.message}: ${groups}` : detail.message)
+        } else {
+          message.error('删除失败')
+        }
       }
     },
   })

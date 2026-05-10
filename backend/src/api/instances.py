@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_db
-from ..models import Instance, Script, RSSItem, RunHistory
+from ..models import Instance, Script, RSSItem, RunHistory, MergeGroupItem, MergeGroup
 from ..schemas import (
     InstanceCreate, InstanceUpdate, InstanceResponse,
     RSSItemResponse, RunHistoryResponse, PaginatedResponse,
@@ -28,7 +28,12 @@ import re
 _SLUG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$")
 
 
-async def _validate_slug(slug: str | None, db: AsyncSession, exclude_id: str | None = None) -> str | None:
+async def _validate_slug(
+    slug: str | None,
+    db: AsyncSession,
+    exclude_id: str | None = None,
+    exclude_merge_group_id: str | None = None,
+) -> str | None:
     """校验并查重 slug。"""
     if slug is None:
         return None
@@ -47,7 +52,10 @@ async def _validate_slug(slug: str | None, db: AsyncSession, exclude_id: str | N
         raise HTTPException(status_code=409, detail=f"slug '{slug}' 已被使用")
     # 检查合并源
     from ..models import MergeGroup
-    r2 = await db.execute(select(MergeGroup.id).where(MergeGroup.rss_slug == slug))
+    stmt2 = select(MergeGroup.id).where(MergeGroup.rss_slug == slug)
+    if exclude_merge_group_id:
+        stmt2 = stmt2.where(MergeGroup.id != exclude_merge_group_id)
+    r2 = await db.execute(stmt2)
     if r2.scalar_one_or_none():
         raise HTTPException(status_code=409, detail=f"slug '{slug}' 已被其他合并源使用")
     return slug
@@ -188,6 +196,23 @@ async def delete_instance(
     instance = await db.get(Instance, instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
+
+    # 删除保护: 被合并源引用时不允许删除
+    group_rows = await db.execute(
+        select(MergeGroup.name)
+        .join(MergeGroupItem, MergeGroup.id == MergeGroupItem.group_id)
+        .where(MergeGroupItem.instance_id == instance_id)
+        .order_by(MergeGroup.name.asc())
+    )
+    group_names = [name for name in group_rows.scalars().all() if name]
+    if group_names:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "实例正在被合并源使用，无法删除",
+                "merge_groups": group_names,
+            },
+        )
 
     # 移除调度任务
     await remove_instance_jobs(instance.id)

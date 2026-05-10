@@ -118,7 +118,11 @@ async def update_merge_group(
     # 更新实例成员
     if data.rss_slug is not None:
         from .instances import _validate_slug
-        group.rss_slug = await _validate_slug(data.rss_slug, db, exclude_id=group_id)
+        group.rss_slug = await _validate_slug(
+            data.rss_slug,
+            db,
+            exclude_merge_group_id=group_id,
+        )
 
     if data.instance_ids is not None:
         await db.execute(

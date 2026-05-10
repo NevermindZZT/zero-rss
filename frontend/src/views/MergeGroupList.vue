@@ -2,7 +2,7 @@
   <n-space vertical :size="16">
     <n-flex justify="space-between" align="center">
       <n-h2 style="margin: 0">合并源管理</n-h2>
-      <n-button type="primary" @click="showCreateModal = true">
+      <n-button type="primary" @click="openCreateModal">
         <template #icon><n-icon><Add /></n-icon></template>
         创建合并源
       </n-button>
@@ -19,7 +19,7 @@
   </n-space>
 
   <!-- 创建/编辑对话框 -->
-  <n-modal v-model:show="showCreateModal" title="创建合并源" preset="card" style="width: 600px">
+  <n-modal v-model:show="showCreateModal" :title="editingId ? '编辑合并源' : '创建合并源'" preset="card" style="width: 600px">
     <n-form>
       <n-form-item label="名称" required>
         <n-input v-model:value="form.name" placeholder="合并源名称" />
@@ -42,8 +42,8 @@
     </n-form>
     <template #footer>
       <n-space justify="end">
-        <n-button @click="showCreateModal = false">取消</n-button>
-        <n-button type="primary" :loading="submitting" @click="handleCreate">创建</n-button>
+        <n-button @click="closeModal">取消</n-button>
+        <n-button type="primary" :loading="submitting" @click="handleSubmit">{{ editingId ? '保存' : '创建' }}</n-button>
       </n-space>
     </template>
   </n-modal>
@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { ref, h, onMounted, reactive } from 'vue'
 import { NIcon, useMessage, useDialog, NTag, NButton, NSpace } from 'naive-ui'
-import { Add, TrashCan } from '@vicons/carbon'
+import { Add, TrashCan, Edit } from '@vicons/carbon'
 import type { DataTableColumn } from 'naive-ui'
 import { useMergeGroupStore } from '@/stores/mergeGroups'
 import { useInstanceStore } from '@/stores/instances'
@@ -68,6 +68,7 @@ const loading = ref(true)
 const submitting = ref(false)
 const showCreateModal = ref(false)
 const groups = ref<MergeGroup[]>([])
+const editingId = ref<string | null>(null)
 
 const form = reactive({
   name: '',
@@ -117,31 +118,71 @@ const columns: DataTableColumn[] = [
   {
     title: '操作',
     key: 'actions',
-    width: 80,
-    render: (row: any) => h(NButton, {
-      size: 'tiny',
-      type: 'error',
-      quaternary: true,
-      onClick: () => handleDelete(row),
-    }, { default: () => '删除', icon: () => h(NIcon, null, { default: () => h(TrashCan) }) }),
+    width: 140,
+    render: (row: any) => h(NSpace, { size: 2 }, {
+      default: () => [
+        h(NButton, {
+          size: 'tiny',
+          quaternary: true,
+          onClick: () => openEditModal(row),
+        }, { default: () => '编辑', icon: () => h(NIcon, null, { default: () => h(Edit) }) }),
+        h(NButton, {
+          size: 'tiny',
+          type: 'error',
+          quaternary: true,
+          onClick: () => handleDelete(row),
+        }, { default: () => '删除', icon: () => h(NIcon, null, { default: () => h(TrashCan) }) }),
+      ],
+    }),
   },
 ]
 
-async function handleCreate() {
+function resetForm() {
+  editingId.value = null
+  form.name = ''
+  form.description = ''
+  form.instance_ids = []
+  form.rss_slug = ''
+  form.max_items = 100
+}
+
+function openCreateModal() {
+  resetForm()
+  showCreateModal.value = true
+}
+
+function closeModal() {
+  showCreateModal.value = false
+  resetForm()
+}
+
+function openEditModal(group: MergeGroup) {
+  editingId.value = group.id
+  form.name = group.name
+  form.description = group.description || ''
+  form.instance_ids = [...(group.instance_ids || [])]
+  form.rss_slug = group.rss_slug || ''
+  form.max_items = group.max_items || 100
+  showCreateModal.value = true
+}
+
+async function handleSubmit() {
   if (!form.name) { message.error('请输入名称'); return }
   if (!form.instance_ids.length) { message.error('请选择至少一个实例'); return }
   submitting.value = true
   try {
-    await mergeStore.create({ ...form })
-    message.success('创建成功')
+    if (editingId.value) {
+      await mergeStore.update(editingId.value, { ...form })
+      message.success('更新成功')
+    } else {
+      await mergeStore.create({ ...form })
+      message.success('创建成功')
+    }
     showCreateModal.value = false
     groups.value = mergeStore.groups
-    form.name = ''
-    form.description = ''
-    form.instance_ids = []
-    form.max_items = 100
+    resetForm()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || '创建失败')
+    message.error(e.response?.data?.detail || (editingId.value ? '更新失败' : '创建失败'))
   } finally {
     submitting.value = false
   }

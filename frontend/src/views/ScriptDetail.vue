@@ -5,6 +5,12 @@
         <n-flex justify="space-between" align="center">
           <n-h2 style="margin: 0">{{ script.name }}</n-h2>
           <n-space>
+            <n-upload :default-upload="false" accept=".py" @change="handleReupload">
+              <n-button>
+                <template #icon><n-icon><Upload /></n-icon></template>
+                重新上传文件
+              </n-button>
+            </n-upload>
             <n-button @click="showEditor = !showEditor">
               <template #icon><n-icon><Code /></n-icon></template>
               {{ showEditor ? '关闭编辑' : '编辑代码' }}
@@ -83,7 +89,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NIcon, useMessage, useDialog } from 'naive-ui'
-import { Code, TrashCan } from '@vicons/carbon'
+import { Code, TrashCan, Upload } from '@vicons/carbon'
 import { useScriptStore } from '@/stores/scripts'
 import { useInstanceStore } from '@/stores/instances'
 import type { DataTableColumn } from 'naive-ui'
@@ -142,6 +148,22 @@ async function saveCode() {
     message.error(e.response?.data?.detail || '保存失败')
   } finally {
     saving.value = false
+  }
+}
+
+async function handleReupload({ file }: { file: any }) {
+  if (!file?.file) return
+  if (!file.name?.endsWith('.py')) {
+    message.error('只支持 .py 文件')
+    return
+  }
+  try {
+    const updated = await scriptStore.updateScriptByUpload(route.params.id as string, file.file)
+    editCode.value = updated.code || ''
+    message.success('脚本文件更新成功')
+  } catch (e: any) {
+    const detail = e.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : '更新失败')
   }
 }
 

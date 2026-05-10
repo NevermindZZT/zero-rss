@@ -49,6 +49,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/InstanceDetail.vue'),
         meta: { title: '实例详情' },
       },
+      {
+        path: 'merge-groups',
+        name: 'MergeGroupList',
+        component: () => import('@/views/MergeGroupList.vue'),
+        meta: { title: '合并源管理' },
+      },
     ],
   },
 ]

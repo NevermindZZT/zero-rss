@@ -113,7 +113,7 @@ const menuOptions = [
   {
     label: '脚本管理',
     key: 'ScriptList',
-    icon: () => h(NIcon, null, { default: () => h(Box) }),
+    icon: () => h(NIcon, null, { default: () => h(Code) }),
   },
   {
     label: '实例管理',
@@ -131,6 +131,11 @@ const menuOptions = [
         icon: () => h(NIcon, null, { default: () => h(Add) }),
       },
     ],
+  },
+  {
+    label: '合并源管理',
+    key: 'MergeGroupList',
+    icon: () => h(NIcon, null, { default: () => h(Dashboard) }),
   },
 ]
 

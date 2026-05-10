@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Script, Instance, RSSItem, RunHistory
+from ..models import Script, Instance, RSSItem, RunHistory, MergeGroup
 from ..schemas import SystemStats, AuthRequest, AuthResponse
 from ..config import settings
 from ..auth import verify_token
@@ -46,6 +46,7 @@ async def system_stats(db: AsyncSession = Depends(get_db)):
             .where(RunHistory.status == "error")
         )
     ).scalar() or 0
+    total_merge_groups = (await db.execute(select(func.count(MergeGroup.id)))).scalar() or 0
 
     return SystemStats(
         total_scripts=total_scripts,
@@ -53,4 +54,5 @@ async def system_stats(db: AsyncSession = Depends(get_db)):
         total_items=total_items,
         enabled_instances=enabled_instances,
         recent_errors=recent_errors,
+        total_merge_groups=total_merge_groups,
     )

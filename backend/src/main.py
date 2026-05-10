@@ -14,6 +14,7 @@ from .config import settings
 from .database import init_db, close_db
 from .api.scripts import router as scripts_router
 from .api.instances import router as instances_router
+from .api.merge_groups import router as merge_groups_router
 from .api.rss import router as rss_router
 from .api.system import router as system_router
 from .core.scheduler import start_scheduler, stop_scheduler
@@ -61,6 +62,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(scripts_router)
 app.include_router(instances_router)
+app.include_router(merge_groups_router)
 app.include_router(rss_router)
 app.include_router(system_router)
 

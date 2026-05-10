@@ -120,3 +120,44 @@ class RunHistory(Base):
 
     def __repr__(self):
         return f"<RunHistory(status={self.status!r}, instance_id={self.instance_id!r})>"
+
+
+class MergeGroup(Base):
+    """合并源表 - 将多个实例合并为一个 RSS 订阅源。"""
+
+    __tablename__ = "merge_groups"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, default="")
+    rss_token = Column(String(64), nullable=False, unique=True, default=_uuid)
+    max_items = Column(Integer, default=100)
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    items = relationship("MergeGroupItem", back_populates="group", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<MergeGroup(name={self.name!r})>"
+
+
+class MergeGroupItem(Base):
+    """合并源成员表 - 记录合并源包含哪些实例。"""
+
+    __tablename__ = "merge_group_items"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    group_id = Column(String(36), ForeignKey("merge_groups.id", ondelete="CASCADE"), nullable=False)
+    instance_id = Column(String(36), ForeignKey("instances.id", ondelete="CASCADE"), nullable=False)
+    sort_order = Column(Integer, default=0)
+
+    group = relationship("MergeGroup", back_populates="items")
+    instance = relationship("Instance")
+
+    __table_args__ = (
+        Index("idx_merge_group_items_group", "group_id"),
+        Index("idx_merge_group_items_instance", "instance_id"),
+    )
+
+    def __repr__(self):
+        return f"<MergeGroupItem(group={self.group_id}, instance={self.instance_id})>"

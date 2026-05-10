@@ -154,3 +154,93 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
                     pass
 
         return fg.rss_str(pretty=True).decode("utf-8")
+
+
+async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
+    """根据合并源 Token 生成合并 RSS XML。
+
+    将多个实例的 RSS 条目合并到一个 Feed 中，
+    按发布时间倒序排列。
+
+    Args:
+        token: 合并源的 RSS token。
+        base_url: 基础 URL。
+
+    Returns:
+        RSS XML 字符串, 如果 token 无效则返回 None。
+    """
+    from ..models import MergeGroup, MergeGroupItem
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(MergeGroup).where(MergeGroup.rss_token == token)
+            .options(
+                selectinload(MergeGroup.items).selectinload(MergeGroupItem.instance)
+            )
+        )
+        group = result.scalar_one_or_none()
+        if not group:
+            return None
+
+        # 收集所有实例 ID
+        instance_ids = [item.instance_id for item in group.items]
+
+        if not instance_ids:
+            # 空组, 返回空 feed
+            fg = FeedGenerator()
+            fg.id(f"{base_url}/rss/merge/{token}.xml")
+            fg.title(group.name)
+            fg.description(group.description or f"Merged RSS feed: {group.name}")
+            fg.link(href=base_url or f"/rss/merge/{token}.xml", rel="alternate")
+            fg.language("zh-CN")
+            return fg.rss_str(pretty=True).decode("utf-8")
+
+        # 查询所有实例的条目, 按时间倒序排列
+        items_result = await session.execute(
+            select(RSSItem)
+            .where(RSSItem.instance_id.in_(instance_ids))
+            .order_by(RSSItem.pub_date.desc().nullslast(), RSSItem.created_at.desc())
+            .limit(group.max_items or 100)
+        )
+        all_items = items_result.scalars().all()
+
+        # 构建 RSS Feed
+        fg = FeedGenerator()
+        fg.id(f"{base_url}/rss/merge/{token}.xml")
+        fg.title(group.name)
+        fg.description(group.description or f"Merged RSS feed: {group.name}")
+        fg.link(href=base_url or f"/rss/merge/{token}.xml", rel="alternate")
+        fg.language("zh-CN")
+
+        # 获取实例名称映射
+        instance_names = {}
+        for item in group.items:
+            if item.instance:
+                instance_names[item.instance_id] = item.instance.name
+
+        for item in all_items:
+            fe = fg.add_entry()
+            fe.id(item.guid or item.id)
+            fe.title(item.title or "(No title)")
+            fe.description(item.description or "")
+            fe.link(href=item.link or "")
+
+            if item.author:
+                fe.author(name=item.author)
+            if item.pub_date:
+                fe.pubDate(item.pub_date.strftime("%a, %d %b %Y %H:%M:%S +0000"))
+
+            # 添加来源标签
+            inst_name = instance_names.get(item.instance_id, "")
+            if inst_name:
+                fe.category(term=inst_name)
+
+            if item.categories:
+                try:
+                    cats = json.loads(item.categories) if isinstance(item.categories, str) else item.categories
+                    for cat in cats:
+                        fe.category(term=cat)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        return fg.rss_str(pretty=True).decode("utf-8")

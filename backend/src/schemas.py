@@ -152,6 +152,7 @@ class SystemStats(BaseModel):
     total_items: int = 0
     enabled_instances: int = 0
     recent_errors: int = 0
+    total_merge_groups: int = 0
 
 
 class AuthRequest(BaseModel):
@@ -174,3 +175,39 @@ class PaginatedResponse(BaseModel):
     total: int = 0
     page: int = 1
     page_size: int = 20
+
+
+# ─── 合并源 ───
+
+
+class MergeGroupCreate(BaseModel):
+    """创建合并源请求。"""
+    name: str = Field(..., description="合并源名称")
+    description: str = Field(default="", description="描述")
+    instance_ids: list[str] = Field(default_factory=list, description="包含的实例 ID 列表")
+    max_items: int = Field(default=100, description="RSS 最大条目数")
+
+
+class MergeGroupUpdate(BaseModel):
+    """更新合并源请求。"""
+    name: str | None = None
+    description: str | None = None
+    instance_ids: list[str] | None = None
+    max_items: int | None = None
+
+
+class MergeGroupResponse(BaseModel):
+    """合并源响应。"""
+    id: str
+    name: str
+    description: str
+    rss_token: str
+    rss_url: str = ""
+    max_items: int
+    instance_ids: list[str] = []
+    instance_names: list[str] = []
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True

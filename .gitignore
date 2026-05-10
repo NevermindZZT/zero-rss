@@ -50,3 +50,5 @@ htmlcov/
 .coverage
 .coverage.*
 coverage/
+
+.tmp/

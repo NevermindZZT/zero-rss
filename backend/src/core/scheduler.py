@@ -32,6 +32,33 @@ logger = logging.getLogger("zero-rss.scheduler")
 scheduler: AsyncIOScheduler | None = None
 
 
+def build_cron_trigger(expr: str) -> CronTrigger:
+    """构建 CronTrigger。
+
+    支持两种格式:
+    - 5 位: 分 时 日 月 周 (标准 crontab)
+    - 6 位: 秒 分 时 日 月 周
+    """
+    normalized = (expr or "").strip()
+    parts = normalized.split()
+
+    if len(parts) == 5:
+        return CronTrigger.from_crontab(normalized)
+
+    if len(parts) == 6:
+        second, minute, hour, day, month, day_of_week = parts
+        return CronTrigger(
+            second=second,
+            minute=minute,
+            hour=hour,
+            day=day,
+            month=month,
+            day_of_week=day_of_week,
+        )
+
+    raise ValueError("Cron expression must have 5 or 6 fields")
+
+
 def get_scheduler() -> AsyncIOScheduler:
     """获取全局调度器实例。"""
     global scheduler
@@ -244,7 +271,7 @@ async def register_instance_jobs(instance_id: str | None = None):
                 cron_exprs = schedule_config.get("cron_expressions", [])
                 for idx, expr in enumerate(cron_exprs):
                     try:
-                        trigger = CronTrigger.from_crontab(expr)
+                        trigger = build_cron_trigger(expr)
                         sched.add_job(
                             execute_instance,
                             trigger,

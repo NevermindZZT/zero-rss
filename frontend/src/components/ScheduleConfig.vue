@@ -26,8 +26,9 @@
       <!-- 定时触发 -->
       <template v-else-if="scheduleType === 'cron'">
         <n-alert type="info" :bordered="false" style="margin-bottom: 12px">
-          定时触发支持多个时间点，使用 cron 表达式 (分 时 日 月 周)。
-          <br />示例: <n-tag size="small">0 8 * * *</n-tag> 表示每天 8:00
+          定时触发支持多个时间点。
+          <br />支持 cron 表达式: <n-tag size="small">分 时 日 月 周</n-tag> 或 <n-tag size="small">秒 分 时 日 月 周</n-tag>
+          <br />示例: <n-tag size="small">0 8 * * *</n-tag> 表示每天 8:00；<n-tag size="small">0 */5 * * * *</n-tag> 表示每 5 分钟触发
         </n-alert>
         <div v-for="(expr, idx) in cronExpressions" :key="idx" style="margin-bottom: 8px">
           <n-space>
@@ -76,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { NIcon } from 'naive-ui'
 import { Close, Add } from '@vicons/carbon'
 
@@ -92,24 +93,43 @@ const scheduleType = ref(props.modelValue?.type || 'interval')
 const intervalMinutes = ref(60)
 const cronExpressions = ref<string[]>(['0 8 * * *'])
 const refreshInterval = ref(30)
+const syncingFromProps = ref(false)
+
+function modelSignature(val: { type: string; config: Record<string, any> | null } | undefined): string {
+  const type = val?.type || 'interval'
+  const config = val?.config || {}
+  return `${type}|${JSON.stringify(config)}`
+}
+
+function applyFromModelValue(val: { type: string; config: Record<string, any> | null } | undefined) {
+  const type = val?.type || 'interval'
+  const config = val?.config || {}
+
+  scheduleType.value = type
+
+  if (type === 'interval') {
+    intervalMinutes.value = Number(config.interval_minutes ?? 60)
+  } else if (type === 'cron') {
+    const exprs = Array.isArray(config.cron_expressions) ? config.cron_expressions : []
+    cronExpressions.value = exprs.length ? [...exprs] : ['0 8 * * *']
+  } else if (type === 'on_refresh') {
+    refreshInterval.value = Number(config.refresh_interval_minutes ?? 30)
+  }
+}
 
 // 从外部 modelValue 初始化
-watch(() => props.modelValue, (val) => {
-  if (val?.type) {
-    scheduleType.value = val.type
-    if (val.config) {
-      if (val.type === 'interval' && val.config.interval_minutes) {
-        intervalMinutes.value = val.config.interval_minutes
-      }
-      if (val.type === 'cron' && val.config.cron_expressions) {
-        cronExpressions.value = [...val.config.cron_expressions]
-      }
-      if (val.type === 'on_refresh' && val.config.refresh_interval_minutes) {
-        refreshInterval.value = val.config.refresh_interval_minutes
-      }
+watch(
+  () => modelSignature(props.modelValue),
+  () => {
+    syncingFromProps.value = true
+    try {
+      applyFromModelValue(props.modelValue)
+    } finally {
+      syncingFromProps.value = false
     }
-  }
-}, { immediate: true })
+  },
+  { immediate: true }
+)
 
 // 输出配置
 function buildConfig() {
@@ -127,7 +147,14 @@ function buildConfig() {
 
 // 任何变更时 emit
 watch([scheduleType, intervalMinutes, cronExpressions, refreshInterval], () => {
-  emit('update:modelValue', buildConfig())
+  if (syncingFromProps.value) {
+    return
+  }
+  const next = buildConfig()
+  if (modelSignature(next) === modelSignature(props.modelValue)) {
+    return
+  }
+  emit('update:modelValue', next)
 }, { deep: true })
 
 function addCron() {
@@ -140,10 +167,14 @@ function removeCron(idx: number) {
 
 function describeCron(expr: string): string {
   const parts = expr.trim().split(/\s+/)
-  if (parts.length !== 5) return '无效表达式'
-  const [min, hour] = parts
-  if (min === '0' && hour !== '*') return `每天 ${hour.padStart(2, '0')}:00`
-  if (min === '0' && hour === '*') return '每小时整点'
-  return `分: ${min} 时: ${hour}`
+  if (parts.length !== 5 && parts.length !== 6) return '无效表达式'
+  if (parts.length === 5) {
+    const [min, hour] = parts
+    if (min === '0' && hour !== '*') return `每天 ${hour.padStart(2, '0')}:00`
+    if (min === '0' && hour === '*') return '每小时整点'
+    return `分: ${min} 时: ${hour}`
+  }
+  const [sec, min, hour] = parts
+  return `秒: ${sec} 分: ${min} 时: ${hour}`
 }
 </script>

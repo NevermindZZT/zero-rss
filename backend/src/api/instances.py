@@ -17,7 +17,7 @@ from ..schemas import (
     RSSItemResponse, RunHistoryResponse, PaginatedResponse,
 )
 from ..auth import verify_token
-from ..core.scheduler import register_instance_jobs, remove_instance_jobs
+from ..core.scheduler import register_instance_jobs, remove_instance_jobs, build_cron_trigger
 from ..core.runner import run_script, test_script, ScriptError
 from ..config import settings
 
@@ -59,6 +59,27 @@ async def _validate_slug(
     if r2.scalar_one_or_none():
         raise HTTPException(status_code=409, detail=f"slug '{slug}' 已被其他合并源使用")
     return slug
+
+
+def _validate_schedule_config(schedule_type: str, schedule_config: dict | None) -> None:
+    """校验调度配置，避免无效配置导致任务未注册。"""
+    if schedule_type != "cron":
+        return
+
+    if not isinstance(schedule_config, dict):
+        raise HTTPException(status_code=422, detail="cron 调度需要 schedule_config")
+
+    cron_exprs = schedule_config.get("cron_expressions")
+    if not isinstance(cron_exprs, list) or not cron_exprs:
+        raise HTTPException(status_code=422, detail="cron 调度至少需要一个 cron_expressions")
+
+    for expr in cron_exprs:
+        if not isinstance(expr, str) or not expr.strip():
+            raise HTTPException(status_code=422, detail="cron 表达式不能为空")
+        try:
+            build_cron_trigger(expr)
+        except Exception:
+            raise HTTPException(status_code=422, detail=f"无效的 cron 表达式: {expr}")
 
 
 @router.get("", response_model=list[InstanceResponse])
@@ -103,6 +124,8 @@ async def create_instance(
     script = await db.get(Script, data.script_id)
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
+
+    _validate_schedule_config(data.schedule_type, data.schedule_config)
 
     # 生成唯一 RSS Token
     rss_token = str(uuid.uuid4()).replace("-", "")
@@ -164,6 +187,20 @@ async def update_instance(
         raise HTTPException(status_code=404, detail="Instance not found")
 
     update_data = data.model_dump(exclude_unset=True)
+
+    effective_schedule_type = update_data.get("schedule_type", instance.schedule_type)
+    if "schedule_config" in update_data:
+        effective_schedule_config = update_data.get("schedule_config")
+    else:
+        if instance.schedule_config:
+            try:
+                effective_schedule_config = json.loads(instance.schedule_config) if isinstance(instance.schedule_config, str) else instance.schedule_config
+            except (json.JSONDecodeError, TypeError):
+                effective_schedule_config = None
+        else:
+            effective_schedule_config = None
+    _validate_schedule_config(effective_schedule_type, effective_schedule_config)
+
     if "params" in update_data and update_data["params"] is not None:
         update_data["params"] = json.dumps(update_data["params"], ensure_ascii=False)
     if "schedule_config" in update_data and update_data["schedule_config"] is not None:

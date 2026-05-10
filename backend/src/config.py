@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 11080
 
+    # 应用版本
+    app_version: str = "1.1.0"
+
     # 外部访问地址 (用于生成 RSS 订阅链接)
     # 如果设置了此项, RSS 链接会使用这个地址而不是 host:port
     # 例如: https://rss.example.com

@@ -1,5 +1,10 @@
 FROM python:3.11-slim
 
+ARG APP_VERSION=dev
+
+LABEL org.opencontainers.image.title="zero-rss-backend" \
+	org.opencontainers.image.version="${APP_VERSION}"
+
 WORKDIR /app
 
 # 安装依赖

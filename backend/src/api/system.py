@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 @router.get("/health")
 async def health_check():
     """健康检查端点 (无需认证)。"""
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": settings.app_version}
 
 
 @router.post("/auth", response_model=AuthResponse)

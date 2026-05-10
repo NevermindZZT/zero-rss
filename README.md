@@ -12,6 +12,33 @@
 - 🔒 Token 认证，安全可控
 - 🎨 美观的 Web 管理界面 (Naive UI)
 
+## 📌 版本
+
+- 当前版本：`1.1.0`
+- 版本源文件：`VERSION`
+
+## 🐳 Docker 镜像自动发布
+
+项目内置 GitHub Actions 工作流，可自动构建并推送后端/前端镜像到 Docker Hub。
+
+需要在仓库 `Settings -> Secrets and variables -> Actions` 配置：
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`（建议使用 Docker Hub Access Token）
+
+工作流文件：`.github/workflows/docker-publish.yml`
+
+触发方式：
+
+- push 到 `main`
+- push tag（如 `v1.1.0`）
+- 手动触发（`workflow_dispatch`）
+
+标签策略：
+
+- `latest` 仅在 push `v*` 版本标签时更新
+- `main` 分支推送只会更新分支/sha 相关标签，不覆盖 `latest`
+
 ## 🚀 快速开始
 
 ### 前置要求

@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="zero-rss",
     description="私有化 RSS 订阅系统 - 用户自定义脚本生成 RSS 订阅源",
-    version="1.0.0",
+    version=settings.app_version,
     lifespan=lifespan,
 )
 
@@ -82,6 +82,6 @@ async def root():
     """根路径 - API 信息。"""
     return {
         "name": "zero-rss",
-        "version": "1.0.0",
+        "version": settings.app_version,
         "docs": "/docs",
     }

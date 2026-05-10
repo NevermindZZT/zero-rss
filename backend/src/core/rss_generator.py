@@ -149,6 +149,8 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
         fg.id(f"{base_url}/rss/{token}.xml")
         fg.title(instance.name)
         fg.description(instance.description or f"RSS feed for {instance.name}")
+        # feedgen 会将最后一个 link 作为 channel <link>，因此 self 要放在 alternate 前
+        fg.link(href=f"{base_url}/rss/{token}.xml", rel="self", type="application/rss+xml")
         fg.link(href=base_url or f"/rss/{token}.xml", rel="alternate")
         fg.language("zh-CN")
         fg.ttl(15)  # 建议客户端 15 分钟刷新一次
@@ -232,6 +234,7 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> tuple | Non
             fg.id(f"{base_url}/rss/merge/{token}.xml")
             fg.title(group.name)
             fg.description(group.description or f"Merged RSS feed: {group.name}")
+            fg.link(href=f"{base_url}/rss/merge/{token}.xml", rel="self", type="application/rss+xml")
             fg.link(href=base_url or f"/rss/merge/{token}.xml", rel="alternate")
             fg.language("zh-CN")
             return fg.rss_str(pretty=True).decode("utf-8"), None
@@ -250,6 +253,7 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> tuple | Non
         fg.id(f"{base_url}/rss/merge/{token}.xml")
         fg.title(group.name)
         fg.description(group.description or f"Merged RSS feed: {group.name}")
+        fg.link(href=f"{base_url}/rss/merge/{token}.xml", rel="self", type="application/rss+xml")
         fg.link(href=base_url or f"/rss/merge/{token}.xml", rel="alternate")
         fg.language("zh-CN")
 

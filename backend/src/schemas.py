@@ -1,8 +1,20 @@
 """Pydantic 请求/响应模型。"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def _utc_dt_encoder(dt: datetime) -> str:
+    """将所有 datetime 序列化为含 Z 后缀的 UTC ISO 字符串。
+
+    SQLite 存储 datetime 时会丢失 tzinfo，Pydantic v2 对 naive datetime
+    不附加时区标识，导致前端解析不一致。
+    此编码器确保所有 datetime 输出都标记为 UTC。
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 # ─── 脚本模板 ───
@@ -32,8 +44,10 @@ class ScriptResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: _utc_dt_encoder},
+    )
 
 
 class ScriptListItem(BaseModel):
@@ -50,8 +64,10 @@ class ScriptListItem(BaseModel):
     updated_at: datetime | None = None
     instance_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: _utc_dt_encoder},
+    )
 
 
 # ─── 脚本实例 ───
@@ -102,8 +118,10 @@ class InstanceResponse(BaseModel):
     last_run_status: str | None = None
     last_error: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: _utc_dt_encoder},
+    )
 
 
 # ─── RSS 条目 ───
@@ -123,8 +141,10 @@ class RSSItemResponse(BaseModel):
     pub_date: datetime | None = None
     created_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: _utc_dt_encoder},
+    )
 
 
 # ─── 运行历史 ───
@@ -141,8 +161,10 @@ class RunHistoryResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: _utc_dt_encoder},
+    )
 
 
 # ─── 系统 ───
@@ -215,5 +237,7 @@ class MergeGroupResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: _utc_dt_encoder},
+    )

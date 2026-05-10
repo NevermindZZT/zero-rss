@@ -5,6 +5,7 @@ FastAPI 应用初始化、路由注册、生命周期事件。
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,7 @@ from .api.merge_groups import router as merge_groups_router
 from .api.rss import router as rss_router
 from .api.system import router as system_router
 from .core.scheduler import start_scheduler, stop_scheduler
+from .schemas import _utc_dt_encoder
 
 
 # 配置日志
@@ -48,6 +50,7 @@ app = FastAPI(
     description="私有化 RSS 订阅系统 - 用户自定义脚本生成 RSS 订阅源",
     version=settings.app_version,
     lifespan=lifespan,
+    json_encoders={datetime: _utc_dt_encoder},
 )
 
 # CORS 配置 (前端开发时使用)

@@ -1,0 +1,39 @@
+services:
+  backend:
+    image: nevermindzzt/zero-rss-backend:${APP_VERSION:-1.1.0}
+    container_name: zero-rss-backend
+    restart: unless-stopped
+    ports:
+      - "11080:11080"
+    volumes:
+      - rss-data:/app/data
+      - ./examples/scripts:/app/scripts:ro
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN:-your-secret-token-here}
+      - DATABASE_URL=sqlite+aiosqlite:///data/rss.db
+      - SCRIPTS_DIR=/app/scripts
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - HOST=0.0.0.0
+      - PORT=11080
+      - APP_VERSION=${APP_VERSION:-1.1.0}
+      - EXTERNAL_URL=${EXTERNAL_URL:-}
+      - SCRIPT_TIMEOUT=${SCRIPT_TIMEOUT:-60}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11080/api/system/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: nevermindzzt/zero-rss-frontend:${APP_VERSION:-1.1.0}
+    container_name: zero-rss-frontend
+    restart: unless-stopped
+    ports:
+      - "11081:80"
+    environment:
+      - API_BASE_URL=http://backend:11080
+    depends_on:
+      - backend
+
+volumes:
+  rss-data:

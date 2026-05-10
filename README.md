@@ -64,6 +64,34 @@ docker compose up -d
 # API:  http://localhost:11080/docs
 ```
 
+### 使用 Docker Hub 镜像部署
+
+如果你想直接使用已经构建好的镜像，可以改用镜像版 compose。
+
+```bash
+cp .env.example .env
+```
+
+在 `.env` 里确认：
+
+```bash
+DOCKERHUB_USERNAME=nevermindzzt
+APP_VERSION=1.1.0
+```
+
+然后启动：
+
+```bash
+docker compose -f docker-compose.image.yml up -d
+```
+
+需要更新时先拉取再重启：
+
+```bash
+docker compose -f docker-compose.image.yml pull
+docker compose -f docker-compose.image.yml up -d
+```
+
 ### 开发模式
 
 ```bash

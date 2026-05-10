@@ -164,12 +164,14 @@ async function handleRun() {
 }
 
 async function handleToggleEnabled() {
-  if (!instance.value) return
+  const currentInstance = instance.value
+  if (!currentInstance) return
   try {
-    instance.value = await instanceStore.update(instance.value.id, {
-      enabled: !instance.value.enabled,
+    const updatedInstance = await instanceStore.update(currentInstance.id, {
+      enabled: !currentInstance.enabled,
     })
-    message.success(instance.value.enabled ? '已启用' : '已禁用')
+    instance.value = updatedInstance
+    message.success(updatedInstance.enabled ? '已启用' : '已禁用')
   } catch (e: any) {
     message.error(e.response?.data?.detail || '操作失败')
   }

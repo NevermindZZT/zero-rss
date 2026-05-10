@@ -5,6 +5,18 @@ import { resolve } from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  build: {
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor'
+          }
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

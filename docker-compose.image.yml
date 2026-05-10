@@ -1,6 +1,6 @@
 services:
   backend:
-    image: nevermindzzt/zero-rss-backend:${APP_VERSION:-1.1.0}
+    image: nevermindzzt/zero-rss-backend:${APP_VERSION:-latest}
     container_name: zero-rss-backend
     restart: unless-stopped
     ports:
@@ -25,7 +25,7 @@ services:
       retries: 3
 
   frontend:
-    image: nevermindzzt/zero-rss-frontend:${APP_VERSION:-1.1.0}
+    image: nevermindzzt/zero-rss-frontend:${APP_VERSION:-latest}
     container_name: zero-rss-frontend
     restart: unless-stopped
     ports:

@@ -13,7 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制源码
 COPY src/ ./src/
-COPY .env.example ./.env
 
 # 创建数据目录和脚本目录
 RUN mkdir -p /data /app/scripts

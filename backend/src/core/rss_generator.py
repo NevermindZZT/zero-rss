@@ -161,9 +161,20 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
             fe = fg.add_entry()
             fe.id(item.guid or item.id)
             fe.title(item.title or "(No title)")
-            # 优先输出 content，避免客户端只能看到旧摘要而错过正文更新
-            entry_body = item.content or item.description or ""
-            fe.description(entry_body)
+            # description: 输出摘要（优先使用 description 字段）
+            # content:encoded: 输出完整正文（CDATA 包裹），feedgen 自动处理
+            summary = item.description or ""
+            full_body = item.content or ""
+            if full_body:
+                # 有完整正文时：description 放摘要，content:encoded 放全文
+                fe.description(summary)
+                fe.content(full_body)
+            elif summary:
+                # 只有摘要：直接放在 description
+                fe.description(summary)
+            else:
+                # 都为空：fallback
+                fe.description("")
             fe.link(href=item.link or "")
 
             if item.author:
@@ -253,9 +264,16 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> tuple | Non
             fe = fg.add_entry()
             fe.id(item.guid or item.id)
             fe.title(item.title or "(No title)")
-            # 合并源同样优先输出 content，保证客户端看到最新主体
-            entry_body = item.content or item.description or ""
-            fe.description(entry_body)
+            # 合并源同样区分 description 和 content:encoded
+            summary = item.description or ""
+            full_body = item.content or ""
+            if full_body:
+                fe.description(summary)
+                fe.content(full_body)
+            elif summary:
+                fe.description(summary)
+            else:
+                fe.description("")
             fe.link(href=item.link or "")
 
             if item.author:

@@ -90,63 +90,114 @@ SCHEDULE = {
 ```python
 {
     "title": "条目标题",           # 必需 - 标题
-    "description": "条目描述",      # 必需 - 描述/摘要
+    "description": "条目描述",      # 必需 - 摘要/预览（HTML 实体编码，见下方说明）
     "link": "https://...",         # 必需 - 原文链接
-    "guid": "unique-id",           # 可选 - 唯一标识, 默认用 link
+    "guid": "unique-id",           # 可选 - 唯一标识, 默认按内容自动生成
     "pub_date": "2024-01-01T00:00:00Z",  # 可选 - ISO 8601 日期
     "author": "作者名",             # 可选 - 作者
     "categories": ["标签1"],        # 可选 - 分类标签
-    "content": "完整内容",           # 可选 - 完整文章内容
+    "content": "完整内容",           # 可选 - 完整正文（CDATA 包裹输出为 <content:encoded>）
     "image": "https://...",        # 可选 - 图片 URL
 }
 ```
 
 ### RSS 属性说明 (推荐作为开发时速查表)
 
-| 属性 | 是否必填 | 类型 | 含义 | 当前 XML 输出情况 |
+| 属性 | 是否必填 | 类型 | 含义 | XML 输出方式 |
 |---|---|---|---|---|
-| `title` | 必填 | `str` | 条目标题，读者第一眼看到的文本 | 输出为 `<title>` |
-| `description` | 必填 | `str` | 条目摘要/主体内容（建议放主要可读内容） | 输出为 `<description>` |
-| `link` | 必填 | `str(URL)` | 原文链接/详情页链接 | 输出为 `<link>` |
-| `guid` | 可选 | `str` | 条目唯一标识，建议全局稳定不变 | 输出为 `<guid>`；为空时回退 `link` |
-| `pub_date` | 可选 | `str(ISO 8601)` | 发布时间，例如 `2026-05-10T08:00:00Z` | 输出为 `<pubDate>`（解析失败会忽略） |
-| `author` | 可选 | `str` | 作者/发布者 | 输出为 `<author>` |
+| `title` | 必填 | `str` | 条目标题，读者第一眼看到的文本 | `<title>`（原样输出） |
+| `description` | 必填 | `str` | 条目摘要/简短预览（HTML 实体编码） | `<description>`（HTML 实体编码） |
+| `link` | 必填 | `str(URL)` | 原文链接/详情页链接 | `<link>` |
+| `guid` | 可选 | `str` | 条目唯一标识，建议全局稳定不变 | `<guid>`；为空时按内容自动生成 |
+| `pub_date` | 可选 | `str(ISO 8601)` | 发布时间，例如 `2026-05-10T08:00:00Z` | `<pubDate>`（缺失/无效则回退为抓取时间） |
+| `author` | 可选 | `str` | 作者/发布者 | `<author>` |
 | `categories` | 可选 | `list[str]` | 分类标签 | 每项输出为 `<category>` |
-| `content` | 可选 | `str` | 完整正文（扩展字段） | 当前实现仅入库，默认不写入 XML |
-| `image` | 可选 | `str(URL)` | 封面图地址（扩展字段） | 当前实现仅入库，默认不写入 XML |
+| `content` | 可选 | `str` | **完整正文（富文本 HTML）** | **`<content:encoded>`**（CDATA 包裹，与 `<description>` 并存） |
+| `image` | 可选 | `str(URL)` | 封面图地址（扩展字段） | 当前仅入库，预留 |
 
-> 兼容性建议: 若你希望读者在 RSS 阅读器里直接看到主体内容，请把主体内容放在 `description`。`content`/`image` 可作为未来扩展字段保留。
+> **核心原则**: `description` = 摘要/预览（HTML 实体编码），`content` = 完整正文（CDATA 包裹在 `<content:encoded>` 中）。详见下方说明。
 
-### 内容主体应该如何处理 (美观易读)
+### 内容输出规范
 
-`description` 必须使用富文本（HTML）输出，采用"标题 + 摘要 + 关键点 + 结尾链接"结构，避免一整段长文本。
+RSS 2.0 本质是 XML，直接嵌入 HTML 标签会破坏文档结构。系统使用两种互补的技术安全传递富文本：
 
-推荐原则：
+| 技术 | 输出位置 | 适用场景 | 编码方式 |
+|---|---|---|---|
+| **HTML 实体编码** | `<description>` | 简短摘要/预览 | 将 `<` `>` `&` 替换为 `&lt;` `&gt;` `&amp;`，最安全、广泛兼容 |
+| **CDATA 区块** | `<content:encoded>` | 完整正文/富文本全文 | `<![CDATA[ ... ]]>` 包裹，XML 解析器原样读取 |
+
+当脚本同时提供 `description` 和 `content` 时，系统会输出**两条并存的字段**：
+
+```xml
+<item>
+  <title>示例标题</title>
+  <description>这是摘要：欢迎来到&lt;strong&gt;示例&lt;/strong&gt;博客</description>
+  <content:encoded><![CDATA[<p>这是完整正文，包含<strong>加粗</strong>和<em>斜体</em>。</p>]]></content:encoded>
+  <link>https://example.com/article</link>
+  <pubDate>Sun, 10 May 2026 08:00:00 +0000</pubDate>
+</item>
+```
+
+#### description — 摘要（HTML 实体编码）
+
+- 用途：**简短预览**，RSS 阅读器列表页直接展示
+- 编码：HTML 实体编码（`<` → `&lt;`），确保 XML 结构安全
+- 长度建议：150~300 字，关键信息前置
+- 无 `content` 时：`description` 也可以承载完整主体（推荐仍用富文本 HTML 实体编码）
+
+#### content — 完整正文（CDATA + content:encoded）
+
+- 用途：**完整文章正文**，RSS 阅读器详情页展示
+- 编码：`<![CDATA[ ... ]]>` 包裹，XML 解析器原样读取，无需转义 HTML 标签
+- 适合内容：带大量 HTML 标签的全正文、含代码块的长文、图文混排
+- 阅读器表现：成熟 RSS 客户端（如 Feedly、NetNewsWire）优先展示 `<content:encoded>`
+
+> 如果只填写 `description`，系统会将其作为唯一输出字段。  
+> 如果只填写 `content`，系统会将其同时放入 `<description>`（CDATA 包裹）和 `<content:encoded>`。  
+> **推荐同时填写二者**：`description` 放摘要，`content` 放全文。
+
+### 内容主体排版建议 (美观易读)
+
+`description` 和 `content` 都应使用富文本（HTML）输出，但二者职责不同：
+
+| 维度 | `description`（摘要） | `content`（全文） |
+|---|---|---|
+| 定位 | RSS 阅读器列表页的预览 | RSS 阅读器详情页的完整阅读体验 |
+| 长度 | 150~300 字 | 不限，可包含完整正文 |
+| 结构 | "摘要段 + 要点 + 查看全文链接" | 完整文章结构 |
+| 编码 | HTML 实体编码 | CDATA 包裹 |
+
+#### description 排版原则
 
 1. **先摘要再细节**: 第一段给 1~2 句核心信息。
 2. **分段清晰**: 使用空行分段，单段控制在 2~4 行。
 3. **信息可扫描**: 关键点用短列表（每行一个要点）。
-4. **长度可控**: 建议 150~600 字；超长正文截断并加"查看全文"提示。
+4. **长度可控**: 建议 150~300 字；超长内容用 `content` 放全文。
 5. **容错优先**: 远程数据为空时填充占位文本，避免空 `description`。
+6. **链接引导**: 结尾必须有"查看全文"链接。
+
+> `content` 的排版无需特别约束，它使用 `<![CDATA[ ... ]]>` 包裹完整的 HTML 正文即可，可以包含任意复杂度的 HTML 标签。
 
 ### 富文本格式规范 (HTML)
 
-`description` 字段统一使用轻量 HTML 片段，推荐并要求如下：
+所有 HTML 内容遵循以下规则：
 
 1. **段落**: 使用 `<p>` 做分段，不用纯 `\n` 作为主要排版手段。
 2. **重点**: 使用 `<strong>` 标注关键词或核心结论。
 3. **列表**: 使用 `<ul><li>...</li></ul>` 表达要点。
 4. **链接**: 使用 `<a href="https://..." target="_blank" rel="noopener noreferrer">...</a>`。
 5. **换行**: 仅在段内短换行时使用 `<br>`，不要连续堆叠 `<br><br><br>`。
+6. **图片**: `<img src="https://..." alt="描述">`（推荐在 `content` 中使用）。
 
 允许标签（白名单建议）：
 
-- `<p>` `<strong>` `<em>` `<ul>` `<ol>` `<li>` `<a>` `<br>` `<code>`
+- `<p>` `<strong>` `<em>` `<ul>` `<ol>` `<li>` `<a>` `<br>` `<code>` `<pre>` `<img>` `<blockquote>`
 
 禁止内容：
 
 - `<script>`、内联事件（如 `onclick`）、`javascript:` 协议链接
-- 大段未转义原始 HTML 片段拼接
+- 大段未转义原始 HTML 片段拼接（会破坏 XML 结构）
+- `description` 中不要放超大 HTML（会降低列表页性能）
 
 ### 主体排版硬性约束 (必须遵守)
 
@@ -158,8 +209,11 @@ SCHEDULE = {
 6. **链接必须可跳转**: `href` 必须是完整绝对地址（`http://` 或 `https://`）。
 7. **列表信息必须可读**: 多要点内容使用 `<ul><li>...</li></ul>`，不要逗号长串。
 8. **链接安全属性**: 外链建议带 `target="_blank" rel="noopener noreferrer"`。
+9. **`description` 使用 HTML 实体编码**: 脚本只需输出合法 HTML 文本，实体编码由系统处理。
+10. **`content` 使用 CDATA 包裹**: 脚本输出原始 HTML 即可，无需额外转义。
 
 不合格示例（禁止）：
+
 
 ```python
 description = f"{summary} {detail} {url}"
@@ -168,28 +222,48 @@ description = f"{summary} {detail} {url}"
 合格示例（推荐 HTML 结构）：
 
 ```python
+# description：使用 HTML 实体编码（esc 函数见下方）
 description = (
     f"<p><strong>摘要</strong>: {summary}</p>"
     f"<p><strong>关键要点</strong>:</p>"
     f"<ul>{''.join(f'<li>{x}</li>' for x in highlights[:5])}</ul>"
-    f"<p><a href='{link}' target='_blank' rel='noopener noreferrer'>查看全文</a></p>"
+    f"<p><a href='{link}' target='_blank' rel='noopener noreferrer'>查看更多</a></p>"
 )
+
+# content：完整正文，系统会自动用 CDATA 包裹放入 <content:encoded>
+content = (
+    f"<h2>详细内容</h2>"
+    f"{full_body_html}"
+)
+
+# 返回时同时包含两个字段
+return [
+    {
+        "title": title,
+        "description": description,  # → <description>（HTML 实体编码）
+        "content": content,          # → <content:encoded>（CDATA 包裹）
+        "link": link,
+    }
+]
 ```
 
 可直接复用的主体模板（富文本，推荐）：
 
 ```python
-summary = (item.get("summary") or "").strip()
-highlights = item.get("highlights") or []
-link = item.get("url") or ""
-
+# --- HTML 实体编码工具函数（用于 description） ---
 def esc(text: str) -> str:
+    """将 HTML 特殊字符转为 XML 实体编码，确保 description 中 XML 结构安全。"""
     return (
         (text or "")
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
+
+# --- description 模板（HTML 实体编码，用于摘要/预览） ---
+summary = (item.get("summary") or "").strip()
+highlights = item.get("highlights") or []
+link = item.get("url") or ""
 
 summary_html = esc(summary) or "暂无摘要"
 list_html = "".join(f"<li>{esc(x)}</li>" for x in highlights[:5])
@@ -200,6 +274,27 @@ description = (
     f"<ul>{list_html}</ul>"
     f"<p><a href='{link}' target='_blank' rel='noopener noreferrer'>查看全文</a></p>"
 )
+
+# --- content 模板（原始 HTML，放入 CDATA 区块，可包含完整正文） ---
+body_html = item.get("body") or item.get("content_html") or ""
+content = (
+    f"<h2>{esc(summary)}</h2>"
+    f"{body_html}"
+    f"<p><a href='{link}'>原文链接</a></p>"
+)
+
+# 最后返回：
+return [
+    {
+        "title": item.get("title") or "无标题",
+        "description": description,      # 摘要（HTML 实体编码）
+        "content": content,              # 完整正文（放入 <content:encoded> CDATA）
+        "link": link,
+        "pub_date": item.get("pub_date"),
+        "author": item.get("author"),
+        "categories": item.get("categories", []),
+    }
+]
 ```
 
 ### 生成质量检查清单
@@ -214,6 +309,17 @@ description = (
 - 包含可点击超链接（`<a href="https://...">...</a>`）
 - 外链包含 `target` 和 `rel` 安全属性
 - 列表数量适中（建议单次返回不超过 50 条）
+- **`description` 和 `content` 分工合理**：前者是摘要+HTML实体编码，后者是全文+CDATA
+- **`content` 不为空时，其中 HTML 应是完整可读的文章正文**
+- **`content` 中不要包含 `<script>` 或内联事件**
+
+---
+
+> **最后提醒**: 你不需要在脚本里自己包裹 `CDATA` 或做实体编码的二次转义。系统后端会自动处理：
+> - `description` → HTML 实体编码后放入 `<description>`
+> - `content` → CDATA 包裹后放入 `<content:encoded>`
+>
+> 你只需输出合法的 HTML 字符串即可。
 
 ## 脚本上下文
 

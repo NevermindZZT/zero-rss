@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 from ..database import async_session
 from ..models import Instance, RunHistory, RSSItem
 from ..config import settings
+from .item_guid import build_item_guid
 
 logger = logging.getLogger("zero-rss.scheduler")
 
@@ -151,7 +152,7 @@ async def execute_instance(instance_id: str):
 
                 rss_item = RSSItem(
                     instance_id=instance_id,
-                    guid=item.get("guid", item.get("link", "")),
+                    guid=build_item_guid(item),
                     title=item.get("title", ""),
                     description=item.get("description", ""),
                     link=item.get("link", ""),

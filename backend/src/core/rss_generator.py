@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from ..database import async_session
 from ..models import Instance, RSSItem
+from .item_guid import build_item_guid
 
 logger = logging.getLogger("zero-rss.rss_generator")
 
@@ -100,7 +101,7 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
 
                     rss_item = RSSItem(
                         instance_id=instance.id,
-                        guid=item.get("guid", item.get("link", "")),
+                        guid=build_item_guid(item),
                         title=item.get("title", ""),
                         description=item.get("description", ""),
                         link=item.get("link", ""),
@@ -145,13 +146,16 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
             fe = fg.add_entry()
             fe.id(item.guid or item.id)
             fe.title(item.title or "(No title)")
-            fe.description(item.description or "")
+            # 优先输出 content，避免客户端只能看到旧摘要而错过正文更新
+            entry_body = item.content or item.description or ""
+            fe.description(entry_body)
             fe.link(href=item.link or "")
 
             if item.author:
                 fe.author(name=item.author)
-            if item.pub_date:
-                fe.pubDate(item.pub_date.strftime("%a, %d %b %Y %H:%M:%S +0000"))
+            pub_dt = item.pub_date or item.created_at
+            if pub_dt:
+                fe.pubDate(pub_dt.strftime("%a, %d %b %Y %H:%M:%S +0000"))
             if item.categories:
                 try:
                     cats = json.loads(item.categories) if isinstance(item.categories, str) else item.categories
@@ -234,13 +238,16 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
             fe = fg.add_entry()
             fe.id(item.guid or item.id)
             fe.title(item.title or "(No title)")
-            fe.description(item.description or "")
+            # 合并源同样优先输出 content，保证客户端看到最新主体
+            entry_body = item.content or item.description or ""
+            fe.description(entry_body)
             fe.link(href=item.link or "")
 
             if item.author:
                 fe.author(name=item.author)
-            if item.pub_date:
-                fe.pubDate(item.pub_date.strftime("%a, %d %b %Y %H:%M:%S +0000"))
+            pub_dt = item.pub_date or item.created_at
+            if pub_dt:
+                fe.pubDate(pub_dt.strftime("%a, %d %b %Y %H:%M:%S +0000"))
 
             # 添加来源标签
             inst_name = instance_names.get(item.instance_id, "")

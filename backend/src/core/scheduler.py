@@ -170,12 +170,14 @@ async def execute_instance(instance_id: str):
             )
 
             for item in items[:max_items]:
-                pub_date = None
+                pub_date = completed_at
                 if item.get("pub_date"):
                     try:
                         pub_date = datetime.fromisoformat(item["pub_date"].replace("Z", "+00:00"))
+                        if pub_date.tzinfo is not None:
+                            pub_date = pub_date.astimezone(timezone.utc).replace(tzinfo=None)
                     except (ValueError, AttributeError):
-                        pub_date = None
+                        pub_date = completed_at
 
                 rss_item = RSSItem(
                     instance_id=instance_id,

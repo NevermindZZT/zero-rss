@@ -328,7 +328,10 @@ const historyColumns: DataTableColumn[] = [
 
 const itemColumns: DataTableColumn[] = [
   { title: '标题', key: 'title', ellipsis: { tooltip: true }, width: 300, render: (row: any) => row.link ? h('a', { href: row.link, target: '_blank', style: { color: '#2080f0' } }, row.title || '(无标题)') : row.title || '(无标题)' },
-  { title: '发布时间', key: 'pub_date', width: 160, render: (row: any) => row.pub_date ? new Date(row.pub_date).toLocaleString() : '-' },
+  { title: '发布时间', key: 'pub_date', width: 180, render: (row: any) => {
+    const ts = row.pub_date || row.created_at
+    return ts ? new Date(ts).toLocaleString() : '-'
+  } },
   { title: '作者', key: 'author', width: 120, render: (row: any) => row.author || '-' },
 ]
 </script>

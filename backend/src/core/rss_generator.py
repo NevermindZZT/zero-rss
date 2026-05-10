@@ -19,6 +19,16 @@ from .item_guid import build_item_guid
 logger = logging.getLogger("zero-rss.rss_generator")
 
 
+def _ensure_utc(dt: datetime | None) -> datetime | None:
+    """确保 datetime 对象带 UTC 时区信息。
+
+    SQLite 存储会丢失 tzinfo，读取后需要补回。
+    """
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
     """根据 RSS Token 或 Slug 生成 RSS XML。
 
@@ -31,7 +41,7 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
         base_url: 基础 URL, 用于生成 RSS 中的链接。
 
     Returns:
-        RSS XML 字符串, 如果未找到则返回 None。
+        (RSS XML 字符串, last_build datetime) 元组, 如果未找到则返回 None。
     """
     from .runner import run_script
 
@@ -90,14 +100,17 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
                     sa_delete(RSSItem.__table__).where(RSSItem.instance_id == instance.id)
                 )
 
+                run_at = datetime.now(timezone.utc)
                 max_items = instance.max_items or 100
                 for item in items[:max_items]:
-                    pub_date = None
+                    pub_date = run_at
                     if item.get("pub_date"):
                         try:
                             pub_date = datetime.fromisoformat(item["pub_date"].replace("Z", "+00:00"))
+                            if pub_date.tzinfo is not None:
+                                pub_date = pub_date.astimezone(timezone.utc).replace(tzinfo=None)
                         except (ValueError, AttributeError):
-                            pub_date = None
+                            pub_date = run_at
 
                     rss_item = RSSItem(
                         instance_id=instance.id,
@@ -113,7 +126,7 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
                     )
                     session.add(rss_item)
 
-                instance.last_run_at = datetime.now(timezone.utc)
+                instance.last_run_at = run_at
                 instance.last_run_status = "success"
                 instance.last_error = None
                 await session.commit()
@@ -138,9 +151,11 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
         fg.description(instance.description or f"RSS feed for {instance.name}")
         fg.link(href=base_url or f"/rss/{token}.xml", rel="alternate")
         fg.language("zh-CN")
+        fg.ttl(15)  # 建议客户端 15 分钟刷新一次
 
-        if instance.last_run_at:
-            fg.lastBuildDate(instance.last_run_at.strftime("%a, %d %b %Y %H:%M:%S +0000"))
+        last_build = _ensure_utc(instance.last_run_at)
+        if last_build:
+            fg.lastBuildDate(last_build)
 
         for item in items_query:
             fe = fg.add_entry()
@@ -153,9 +168,9 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
 
             if item.author:
                 fe.author(name=item.author)
-            pub_dt = item.pub_date or item.created_at
+            pub_dt = _ensure_utc(item.pub_date) or _ensure_utc(item.created_at)
             if pub_dt:
-                fe.pubDate(pub_dt.strftime("%a, %d %b %Y %H:%M:%S +0000"))
+                fe.pubDate(pub_dt)
             if item.categories:
                 try:
                     cats = json.loads(item.categories) if isinstance(item.categories, str) else item.categories
@@ -164,10 +179,10 @@ async def generate_rss_xml(token: str, base_url: str = "") -> str | None:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-        return fg.rss_str(pretty=True).decode("utf-8")
+        return fg.rss_str(pretty=True).decode("utf-8"), last_build
 
 
-async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
+async def generate_merged_rss_xml(token: str, base_url: str = "") -> tuple | None:
     """根据合并源 Token 或 Slug 生成合并 RSS XML。
 
     将多个实例的 RSS 条目合并到一个 Feed 中，
@@ -178,7 +193,7 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
         base_url: 基础 URL。
 
     Returns:
-        RSS XML 字符串, 如果未找到则返回 None。
+        (RSS XML 字符串, None) 元组, 如果未找到则返回 None。
     """
     from ..models import MergeGroup, MergeGroupItem
 
@@ -209,7 +224,7 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
             fg.description(group.description or f"Merged RSS feed: {group.name}")
             fg.link(href=base_url or f"/rss/merge/{token}.xml", rel="alternate")
             fg.language("zh-CN")
-            return fg.rss_str(pretty=True).decode("utf-8")
+            return fg.rss_str(pretty=True).decode("utf-8"), None
 
         # 查询所有实例的条目, 按时间倒序排列
         items_result = await session.execute(
@@ -245,9 +260,9 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
 
             if item.author:
                 fe.author(name=item.author)
-            pub_dt = item.pub_date or item.created_at
+            pub_dt = _ensure_utc(item.pub_date) or _ensure_utc(item.created_at)
             if pub_dt:
-                fe.pubDate(pub_dt.strftime("%a, %d %b %Y %H:%M:%S +0000"))
+                fe.pubDate(pub_dt)
 
             # 添加来源标签
             inst_name = instance_names.get(item.instance_id, "")
@@ -262,4 +277,4 @@ async def generate_merged_rss_xml(token: str, base_url: str = "") -> str | None:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-        return fg.rss_str(pretty=True).decode("utf-8")
+        return fg.rss_str(pretty=True).decode("utf-8"), None

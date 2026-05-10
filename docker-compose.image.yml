@@ -15,7 +15,6 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - HOST=0.0.0.0
       - PORT=11080
-      - APP_VERSION=${APP_VERSION:-1.1.0}
       - EXTERNAL_URL=${EXTERNAL_URL:-}
       - SCRIPT_TIMEOUT=${SCRIPT_TIMEOUT:-60}
     healthcheck:

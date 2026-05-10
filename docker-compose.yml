@@ -6,7 +6,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        APP_VERSION: ${APP_VERSION:-1.1.0}
+        APP_VERSION: ${APP_VERSION:-dev}
     container_name: zero-rss-backend
     restart: unless-stopped
     ports:
@@ -21,7 +21,6 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - HOST=0.0.0.0
       - PORT=11080
-      - APP_VERSION=${APP_VERSION:-1.1.0}
       - EXTERNAL_URL=${EXTERNAL_URL:-}
       - SCRIPT_TIMEOUT=${SCRIPT_TIMEOUT:-60}
     healthcheck:
@@ -35,7 +34,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        APP_VERSION: ${APP_VERSION:-1.1.0}
+        APP_VERSION: ${APP_VERSION:-dev}
     container_name: zero-rss-frontend
     restart: unless-stopped
     ports:

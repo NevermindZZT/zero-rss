@@ -5,6 +5,8 @@ ARG APP_VERSION=dev
 LABEL org.opencontainers.image.title="zero-rss-backend" \
 	org.opencontainers.image.version="${APP_VERSION}"
 
+ENV APP_VERSION=${APP_VERSION}
+
 WORKDIR /app
 
 # 安装依赖

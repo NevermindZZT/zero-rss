@@ -6,6 +6,14 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 
+def _read_repo_version() -> str:
+    """读取仓库根目录 VERSION 作为默认应用版本。"""
+    version_file = Path(__file__).resolve().parents[2] / "VERSION"
+    if version_file.exists():
+        return version_file.read_text(encoding="utf-8").strip()
+    return "dev"
+
+
 class Settings(BaseSettings):
     """应用配置。
 
@@ -29,7 +37,7 @@ class Settings(BaseSettings):
     port: int = 11080
 
     # 应用版本
-    app_version: str = "1.1.0"
+    app_version: str = _read_repo_version()
 
     # 外部访问地址 (用于生成 RSS 订阅链接)
     # 如果设置了此项, RSS 链接会使用这个地址而不是 host:port

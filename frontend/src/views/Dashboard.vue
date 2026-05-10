@@ -66,7 +66,7 @@
             <n-descriptions-item label="系统状态">
               <n-tag type="success" :bordered="false">运行中</n-tag>
             </n-descriptions-item>
-            <n-descriptions-item label="版本">1.0.0</n-descriptions-item>
+              <n-descriptions-item label="版本">{{ appVersion }}</n-descriptions-item>
             <n-descriptions-item label="最近错误">{{ stats.recent_errors }} 次</n-descriptions-item>
             <n-descriptions-item label="数据持久化">SQLite 本地存储</n-descriptions-item>
           </n-descriptions>
@@ -89,11 +89,16 @@ const stats = ref({
   enabled_instances: 0,
   recent_errors: 0,
 })
+const appVersion = ref('unknown')
 
 onMounted(async () => {
   try {
-    const res = await apiClient.get('/api/system/stats')
-    stats.value = res.data
+    const [statsRes, healthRes] = await Promise.all([
+      apiClient.get('/api/system/stats'),
+      apiClient.get('/api/system/health'),
+    ])
+    stats.value = statsRes.data
+    appVersion.value = healthRes.data?.version || 'unknown'
   } catch {
     // ignore
   }

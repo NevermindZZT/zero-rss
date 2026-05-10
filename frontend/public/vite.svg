@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="45" fill="#2080F0" />
+  <text x="50" y="55" text-anchor="middle" fill="white" font-size="30" font-family="Arial" font-weight="bold">R</text>
+  <circle cx="50" cy="50" r="40" fill="none" stroke="white" stroke-width="2" stroke-dasharray="8 4" />
+</svg>
